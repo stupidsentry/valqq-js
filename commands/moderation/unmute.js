@@ -1,12 +1,14 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const logger = require('../../utils/logAction.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('unmute')
-    .setDescription('Remove the mute role from a user')
+    .setDescription('Remove the "Muted" role from a user.')
     .addUserOption(option =>
-      option.setName('user').setDescription('User to unmute').setRequired(true)
-    )
+      option.setName('user')
+        .setDescription('User to unmute')
+        .setRequired(true))
     .setDefaultMemberPermissions(PermissionsBitField.Flags.MuteMembers),
 
   async execute(interaction) {
@@ -14,22 +16,40 @@ module.exports = {
     const muteRole = interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'muted');
 
     if (!member || !muteRole) {
-      return interaction.reply({ content: '❌ Member or mute role not found.', ephemeral: true });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('Member or "Muted" role not found.');
+      return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
     if (!member.roles.cache.has(muteRole.id)) {
-      return interaction.reply({ content: '❌ This user is not muted.', ephemeral: true });
+      const notMutedEmbed = new EmbedBuilder()
+        .setColor('Yellow')
+        .setDescription('This user is not currently muted.');
+      return interaction.reply({ embeds: [notMutedEmbed], ephemeral: true });
     }
 
     try {
       await member.roles.remove(muteRole);
-      await interaction.reply({ content: `✅ Unmuted ${member.user.tag}.`, ephemeral: true });
 
-      const logger = require('../../utils/logAction');
-      await logger.log(interaction.guild, 'Unmute', interaction.user, `Unmuted <@${member.id}>`, 'Moderation');
+      const successEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setDescription(`<@${member.id}> has been unmuted.`);
+      await interaction.reply({ embeds: [successEmbed], ephemeral: false });
+
+      await logger.log(
+        interaction.guild,
+        '🔈 Unmute',
+        interaction.user,
+        `Unmuted <@${member.id}> (${member.user.tag})`,
+        'Moderation'
+      );
     } catch (err) {
-      console.error(err);
-      await interaction.reply({ content: '❌ Failed to unmute user.', ephemeral: true });
+      console.error('Failed to unmute:', err);
+      const failEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('Failed to unmute the user.');
+      await interaction.reply({ embeds: [failEmbed], ephemeral: true });
     }
   }
 };

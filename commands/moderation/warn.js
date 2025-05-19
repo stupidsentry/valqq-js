@@ -1,4 +1,3 @@
-
 const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -49,7 +48,7 @@ module.exports = {
 
     saveWarnings(warnings);
 
-    // Logging
+    // ✅ Log to moderation channel if set
     const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
     const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
     const logChannelId = settings[interaction.guildId]?.logChannelId;
@@ -57,16 +56,25 @@ module.exports = {
     if (logChannelId) {
       const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
       if (logChannel?.isTextBased()) {
-        const embed = new EmbedBuilder()
-          .setTitle('⚠️ User Warned')
-          .setDescription(`<@${target.id}> was warned by <@${interaction.user.id}>`)
-          .addFields({ name: 'Reason', value: reason })
-          .setColor(0xf1c40f)
+        const logEmbed = new EmbedBuilder()
+          .setColor('Yellow')
+          .setTitle('User Warned')
+          .addFields(
+            { name: 'User', value: `<@${target.id}> (${target.tag})`, inline: true },
+            { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+            { name: 'Reason', value: reason }
+          )
           .setTimestamp();
-        await logChannel.send({ embeds: [embed] });
+
+        await logChannel.send({ embeds: [logEmbed] });
       }
     }
 
-    await interaction.reply({ content: `✅ <@${target.id}> has been warned for: ${reason}`, ephemeral: false });
+    // ✅ Reply to the mod
+    const replyEmbed = new EmbedBuilder()
+      .setColor('Green')
+      .setDescription(`<@${target.id}> has been warned.\n📄 **Reason:** ${reason}`);
+
+    await interaction.reply({ embeds: [replyEmbed], ephemeral: false });
   }
 };

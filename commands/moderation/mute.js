@@ -1,4 +1,6 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -25,29 +27,56 @@ module.exports = {
 
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (!member) {
-      return interaction.reply({ content: '❌ User not found or not in the server.', ephemeral: true });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('User not found or not in the server.');
+      return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
     if (!member.moderatable) {
-      return interaction.reply({ content: '❌ I do not have permission to mute this user.', ephemeral: true });
+      const permissionEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('I do not have permission to mute this user.');
+      return interaction.reply({ embeds: [permissionEmbed], ephemeral: true });
     }
 
-    const ms = duration * 60 * 1000;
-    await member.timeout(ms, reason);
+    try {
+      const ms = duration * 60 * 1000;
+      await member.timeout(ms, reason);
 
-    // Logging
-    const settingsPath = require('path').join(__dirname, '../../data/guildSettings.json');
-    const fs = require('fs');
-    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
-    const logChannelId = settings[interaction.guildId]?.logChannelId;
+      // Optional log channel
+      const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
+      const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
+      const logChannelId = settings[interaction.guildId]?.logChannelId;
 
-    if (logChannelId) {
-      const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
-      if (logChannel?.isTextBased()) {
-        await logChannel.send(`🔇 **Mute**: <@${target.id}> was muted by <@${interaction.user.id}> for **${duration} minute(s)**\n📄 Reason: ${reason}`);
+      if (logChannelId) {
+        const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
+        if (logChannel?.isTextBased()) {
+          const logEmbed = new EmbedBuilder()
+            .setColor('Orange')
+            .setTitle('Member Muted')
+            .addFields(
+              { name: 'User', value: `<@${target.id}> (${target.tag})`, inline: true },
+              { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+              { name: 'Duration', value: `${duration} minute(s)`, inline: true },
+              { name: 'Reason', value: reason }
+            )
+            .setTimestamp();
+
+          await logChannel.send({ embeds: [logEmbed] });
+        }
       }
-    }
 
-    await interaction.reply({ content: `✅ <@${target.id}> has been muted for **${duration} minute(s)**.`, ephemeral: false });
+      const successEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setDescription(`<@${target.id}> has been muted for **${duration} minute(s)**.`);
+      await interaction.reply({ embeds: [successEmbed], ephemeral: false });
+
+    } catch (err) {
+      const failEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('Failed to mute the user.');
+      await interaction.reply({ embeds: [failEmbed], ephemeral: true });
+    }
   }
 };

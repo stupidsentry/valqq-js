@@ -1,30 +1,47 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const logger = require('../../utils/logAction.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('untimeout')
-    .setDescription('Remove a timeout from a user')
+    .setDescription('Remove a timeout from a user.')
     .addUserOption(option =>
-      option.setName('user').setDescription('The user to remove timeout from').setRequired(true)
-    )
+      option.setName('user')
+        .setDescription('The user to remove timeout from')
+        .setRequired(true))
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ModerateMembers),
 
   async execute(interaction) {
     const member = interaction.options.getMember('user');
 
     if (!member) {
-      return interaction.reply({ content: '❌ Could not find the member.', ephemeral: true });
+      const notFoundEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('Could not find the member.');
+      return interaction.reply({ embeds: [notFoundEmbed], ephemeral: true });
     }
 
     try {
-      await member.timeout(null); // removes timeout
-      await interaction.reply({ content: `✅ Timeout removed from ${member.user.tag}.`, ephemeral: true });
+      await member.timeout(null); // Remove timeout
 
-      const logger = require('../../utils/logAction');
-      await logger.log(interaction.guild, 'Timeout Removed', interaction.user, `Removed timeout from <@${member.id}>`, 'Moderation');
+      const successEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setDescription(`Timeout removed from <@${member.id}>.`);
+      await interaction.reply({ embeds: [successEmbed], ephemeral: false });
+
+      await logger.log(
+        interaction.guild,
+        'Timeout Removed',
+        interaction.user,
+        `Removed timeout from <@${member.id}> (${member.user.tag})`,
+        'Moderation'
+      );
     } catch (err) {
-      console.error(err);
-      await interaction.reply({ content: '❌ Failed to remove timeout.', ephemeral: true });
+      console.error('Failed to remove timeout:', err);
+      const failEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('Failed to remove timeout.');
+      await interaction.reply({ embeds: [failEmbed], ephemeral: true });
     }
   }
 };
