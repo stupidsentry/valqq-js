@@ -1,48 +1,69 @@
-
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('kick')
-    .setDescription('Kick a user from the server.')
-    .addUserOption(opt =>
-      opt.setName('user')
-        .setDescription('User to kick')
+    .setName('delete')
+    .setDescription('Delete a specific message by message ID in a given channel.')
+    .addChannelOption(opt =>
+      opt.setName('channel')
+        .setDescription('Channel where the message is located')
         .setRequired(true))
     .addStringOption(opt =>
-      opt.setName('reason')
-        .setDescription('Reason for the kick')
-        .setRequired(false))
-    .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers),
+      opt.setName('message_id')
+        .setDescription('The ID of the message to delete')
+        .setRequired(true))
+    .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
 
   async execute(interaction) {
-    const target = interaction.options.getUser('user');
-    const reason = interaction.options.getString('reason') || 'No reason provided';
+    const channel = interaction.options.getChannel('channel');
+    const messageId = interaction.options.getString('message_id');
 
-    const member = await interaction.guild.members.fetch(target.id).catch(() => null);
-    if (!member) {
-      return interaction.reply({ content: '❌ User not found or not in the server.', ephemeral: true });
+    if (!channel.isTextBased()) {
+      const errorEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(' That channel is not text-based.');
+      return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
-    if (!member.kickable) {
-      return interaction.reply({ content: '❌ I do not have permission to kick this user.', ephemeral: true });
-    }
+    try {
+      const message = await channel.messages.fetch(messageId);
+      await message.delete();
 
-    await member.kick(reason);
+      // Logging
+      const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
+      const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
+      const logChannelId = settings[interaction.guildId]?.logChannelId;
 
-    // Logging
-    const settingsPath = require('path').join(__dirname, '../../data/guildSettings.json');
-    const fs = require('fs');
-    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
-    const logChannelId = settings[interaction.guildId]?.logChannelId;
+      if (logChannelId) {
+        const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
+        if (logChannel?.isTextBased()) {
+          const logEmbed = new EmbedBuilder()
+            .setColor('Orange')
+            .setTitle('🗑️ Message Deleted')
+            .addFields(
+              { name: 'Author', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
+              { name: 'Channel', value: `<#${channel.id}>`, inline: true },
+              { name: 'Message ID', value: `\`${messageId}\`` }
+            )
+            .setTimestamp();
 
-    if (logChannelId) {
-      const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
-      if (logChannel?.isTextBased()) {
-        await logChannel.send(`🥾 **Kick**: <@${target.id}> was kicked by <@${interaction.user.id}>\n📄 Reason: ${reason}`);
+          await logChannel.send({ embeds: [logEmbed] });
+        }
       }
-    }
 
-    await interaction.reply({ content: `✅ <@${target.id}> has been kicked.`, ephemeral: false });
+      //  Success embed reply to user
+      const successEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setDescription(` Message \`${messageId}\` deleted successfully.`);
+
+      await interaction.reply({ embeds: [successEmbed], ephemeral: true });
+    } catch (err) {
+      const failEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('Failed to delete message. Check ID and channel.');
+      await interaction.reply({ embeds: [failEmbed], ephemeral: true });
+    }
   }
 };

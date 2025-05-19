@@ -1,4 +1,6 @@
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -27,21 +29,30 @@ module.exports = {
       await message.delete();
 
       // Logging
-      const settingsPath = require('path').join(__dirname, '../../data/guildSettings.json');
-      const fs = require('fs');
+      const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
       const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
       const logChannelId = settings[interaction.guildId]?.logChannelId;
 
       if (logChannelId) {
         const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
         if (logChannel?.isTextBased()) {
-          await logChannel.send(` **Deleted Message** by <@${message.author.id}> in <#${channel.id}>\nMessage ID: \`${messageId}\``);
+          const embed = new EmbedBuilder()
+            .setColor('Orange')
+            .setTitle('🗑️ Message Deleted')
+            .addFields(
+              { name: 'Author', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
+              { name: 'Channel', value: `<#${channel.id}>`, inline: true },
+              { name: 'Message ID', value: `\`${messageId}\`` }
+            )
+            .setTimestamp();
+
+          await logChannel.send({ embeds: [embed] });
         }
       }
 
       await interaction.reply({ content: ` Message \`${messageId}\` deleted successfully.`, ephemeral: true });
     } catch (err) {
-      await interaction.reply({ content: 'Failed to delete message. Check ID and channel.', ephemeral: true });
+      await interaction.reply({ content: ' Failed to delete message. Check ID and channel.', ephemeral: true });
     }
   }
 };

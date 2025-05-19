@@ -1,5 +1,6 @@
-
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,40 +8,68 @@ module.exports = {
     .setDescription('Bulk delete messages in a channel.')
     .addIntegerOption(opt =>
       opt.setName('amount')
-        .setDescription('Number of messages to delete (max 100)')
+        .setDescription('Number of messages to delete (1–400)')
         .setRequired(true))
+    .addStringOption(opt =>
+      opt.setName('after_message_id')
+        .setDescription('(Optional) Start purging after this message ID'))
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
 
   async execute(interaction) {
     const amount = interaction.options.getInteger('amount');
-
-    if (amount < 1 || amount > 100) {
-      return interaction.reply({ content: '❌ Please enter a number between 1 and 100.', ephemeral: true });
-    }
-
+    const afterMessageId = interaction.options.getString('after_message_id');
     const channel = interaction.channel;
-    if (!channel.isTextBased()) {
-      return interaction.reply({ content: '❌ This command can only be used in text-based channels.', ephemeral: true });
+
+    if (amount < 1 || amount > 400) {
+      const invalidAmount = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(' Please enter a number between 1 and 400.');
+      return interaction.reply({ embeds: [invalidAmount], ephemeral: true });
     }
 
-    const messages = await channel.bulkDelete(amount, true).catch(() => null);
-    if (!messages) {
-      return interaction.reply({ content: '❌ Failed to delete messages. Messages older than 14 days cannot be deleted.', ephemeral: true });
+    if (!channel.isTextBased()) {
+      const invalidChannel = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(' This command can only be used in text-based channels.');
+      return interaction.reply({ embeds: [invalidChannel], ephemeral: true });
+    }
+
+    let messagesToDelete;
+    try {
+      if (afterMessageId) {
+        // Fetch and delete messages after a given ID
+        const afterMessage = await channel.messages.fetch(afterMessageId);
+        const allMessages = await channel.messages.fetch({ after: afterMessage.id, limit: amount });
+        messagesToDelete = allMessages.filter(msg => (Date.now() - msg.createdTimestamp) < 14 * 24 * 60 * 60 * 1000);
+
+        await channel.bulkDelete(messagesToDelete, true);
+      } else {
+        // Bulk delete most recent messages
+        messagesToDelete = await channel.bulkDelete(amount, true);
+      }
+    } catch (err) {
+      const failEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(' Failed to delete messages. Check that the message ID is valid and messages are not older than 14 days.');
+      return interaction.reply({ embeds: [failEmbed], ephemeral: true });
     }
 
     // Logging
-    const settingsPath = require('path').join(__dirname, '../../data/guildSettings.json');
-    const fs = require('fs');
+    const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
     const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
     const logChannelId = settings[interaction.guildId]?.logChannelId;
 
     if (logChannelId) {
       const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
       if (logChannel?.isTextBased()) {
-        await logChannel.send(`🧹 **Purge**: ${messages.size} messages deleted in <#${channel.id}> by <@${interaction.user.id}>`);
+        await logChannel.send(` **Purge**: ${messagesToDelete.size} messages deleted in <#${channel.id}> by <@${interaction.user.id}>`);
       }
     }
 
-    await interaction.reply({ content: `✅ Deleted ${messages.size} message(s).`, ephemeral: true });
+    const successEmbed = new EmbedBuilder()
+      .setColor('Green')
+      .setDescription(` Deleted ${messagesToDelete.size} message(s).`);
+
+    await interaction.reply({ embeds: [successEmbed], ephemeral: true });
   }
 };
