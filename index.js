@@ -105,8 +105,10 @@ fs.readdirSync(eventsPath).forEach(file => {
 
 // ✅ Ready event
 client.once(Events.ClientReady, async () => {
-  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  console.log(`🟢 Logged in as ${client.user.tag}`);
 
+  // 🔄 Register slash commands globally
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     const commandData = [...client.commands.values()]
       .filter(cmd => typeof cmd.data?.toJSON === 'function')
@@ -134,9 +136,9 @@ client.once(Events.ClientReady, async () => {
     if (testGuild) {
       await logger.log(
         testGuild,
-        '🟢 Bot Ready',
+        'Bot Active',
         client.user,
-        'Valqq is now online and ready.'
+        'Valqq is still online and ready.'
       );
     }
   } catch (err) {
@@ -150,9 +152,10 @@ client.once(Events.ClientReady, async () => {
     remind?.scheduleAll?.(client);
     remindWeekly?.scheduleAll?.(client);
   } catch (err) {
-    console.error('❌ Reminder scheduling error:', err.message);
+    console.error('Reminder scheduling error:', err.message);
   }
 });
+
 
 // 🚀 Login
 client.login(process.env.TOKEN);
