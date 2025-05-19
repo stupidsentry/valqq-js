@@ -1,70 +1,39 @@
+const { Events, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const badwordsPath = path.join(__dirname, '../../data/badwords.json');
-
-// Load per-guild bad word list
-function getBadWords(guildId) {
-  if (!fs.existsSync(badwordsPath)) return [];
-  try {
-    const allWords = JSON.parse(fs.readFileSync(badwordsPath));
-    return allWords[guildId] || [];
-  } catch {
-    return [];
-  }
-}
-
-// Convert leetspeak and normalise text
-function normalise(text) {
-  return text
-    .toLowerCase()
-    .replace(/0/g, 'o')
-    .replace(/1/g, 'i')
-    .replace(/3/g, 'e')
-    .replace(/4/g, 'a')
-    .replace(/5/g, 's')
-    .replace(/7/g, 't')
-    .replace(/8/g, 'b')
-    .replace(/@/g, 'a')
-    .replace(/[^a-z]/g, '')       // remove non-letters
-    .replace(/(.)\1+/g, '$1');    // collapse repeated letters
-}
 
 module.exports = {
-  data: null,
-  async monitor(message, client) {
-    const badwords = getBadWords(message.guild.id);
-    if (!badwords.length || !message.content) return;
+  name: Events.MessageCreate,
+  async execute(message) {
+    if (message.author.bot || !message.guild) return;
 
-    const original = message.content;
-    const cleaned = normalise(original);
+    // Load server settings
+    const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
+    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
+    const guildSettings = settings[message.guild.id];
 
-    const matchedWord = badwords.find(word => cleaned.includes(normalise(word)));
+    if (!guildSettings || !guildSettings.badWords || !guildSettings.logChannelId) return;
 
-    if (matchedWord) {
-      try {
-        await message.delete();
-        console.log(`[AUTOMOD] Deleted message for word: "${matchedWord}"`);
+    const badWords = guildSettings.badWords.map(word => word.toLowerCase());
+    const content = message.content.toLowerCase();
 
-        // Send DM to user
-        try {
-          await message.author.send({
-            content: `🚫 Your message in **${message.guild.name}** was removed for containing a disallowed word.\n\n**Matched Word:** \`${matchedWord}\`\n**Original Message:**\n\`\`\`${original}\`\`\``
-          });
-          console.log(`[AUTOMOD] DM sent to ${message.author.tag}`);
-        } catch (dmErr) {
-          console.warn(`[AUTOMOD] Could not DM ${message.author.tag}:`, dmErr.message);
-        }
+    // Check for bad words
+    if (badWords.some(word => content.includes(word))) {
+      await message.delete().catch(() => null);
 
-        // Log to moderation log channel
-        const logger = require('../../utils/logAction.js');
-        await logger.log(
-          message.guild,
-          '🛑 Automod: Obfuscated Bad Word',
-          message.author,
-          `Message deleted in <#${message.channel.id}>.\nMatched bypass of: \`${matchedWord}\`\n**Original Message:**\n\`\`\`${original}\`\`\``
-        );
-      } catch (err) {
-        console.error('❌ Failed to delete or log bypassed message:', err);
+      const logChannel = await message.guild.channels.fetch(guildSettings.logChannelId).catch(() => null);
+      if (logChannel && logChannel.isTextBased()) {
+        const embed = new EmbedBuilder()
+          .setColor('Red')
+          .setTitle('Auto-Moderation Triggered')
+          .addFields(
+            { name: 'User', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
+            { name: 'Reason', value: 'Banned word detected.', inline: true },
+            { name: 'Message Content', value: message.content || 'N/A' }
+          )
+          .setTimestamp();
+
+        await logChannel.send({ embeds: [embed] });
       }
     }
   }

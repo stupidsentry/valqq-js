@@ -1,5 +1,4 @@
-
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -39,10 +38,26 @@ module.exports = {
     if (logChannelId) {
       const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
       if (logChannel?.isTextBased()) {
-        await logChannel.send(`🔨 **Ban**: <@${target.id}> was banned by <@${interaction.user.id}>\n📄 Reason: ${reason}`);
+        const embed = new EmbedBuilder()
+          .setTitle(' Member Banned')
+          .setColor('Red')
+          .addFields(
+            { name: 'User', value: `<@${target.id}> (${target.tag})`, inline: true },
+            { name: 'Moderator', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
+            { name: 'Reason', value: reason }
+          )
+          .setTimestamp();
+
+        await logChannel.send({ embeds: [embed] });
       }
     }
 
-    await interaction.reply({ content: `✅ <@${target.id}> has been banned.`, ephemeral: false });
+    const responseEmbed = new EmbedBuilder()
+  .setColor('Green')
+  .setDescription(` <@${target.id}> has been banned.`);
+
+await interaction.reply({ embeds: [responseEmbed], ephemeral: false });
+
   }
 };
+
