@@ -20,10 +20,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Root route (pinged by UptimeRobot)
 app.get('/', (req, res) => {
-  res.status(200).send('OK'); // Use simple, reliable response
+  res.status(200).send('OK');
 });
+
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
 
 // ✅ Start server
 app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
