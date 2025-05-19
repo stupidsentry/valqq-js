@@ -47,7 +47,7 @@ module.exports = {
 
       const logEmbed = new EmbedBuilder()
         .setColor('Orange')
-        .setTitle('⏱️ Timeout Issued')
+        .setTitle('Timeout Issued')
         .addFields(
           { name: 'User', value: `<@${member.id}> (${member.user.tag})`, inline: true },
           { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
