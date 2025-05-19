@@ -1,5 +1,6 @@
-
-const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,34 +17,59 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers),
 
   async execute(interaction) {
-    const target = interaction.options.getUser('user');
+    const targetUser = interaction.options.getUser('user');
     const reason = interaction.options.getString('reason') || 'No reason provided';
 
-    const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+    const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
     if (!member) {
-      return interaction.reply({ content: '❌ User not found or not in the server.', ephemeral: true });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('User not found or not in the server.');
+      return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
     if (!member.kickable) {
-      return interaction.reply({ content: '❌ I do not have permission to kick this user.', ephemeral: true });
+      const permissionEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(' I do not have permission to kick this user.');
+      return interaction.reply({ embeds: [permissionEmbed], ephemeral: true });
     }
 
-    await member.kick(reason);
+    try {
+      await member.kick(reason);
 
-    // Logging
-    const settingsPath = require('path').join(__dirname, '../../data/guildSettings.json');
-    const fs = require('fs');
-    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
-    const logChannelId = settings[interaction.guildId]?.logChannelId;
+      // Optional log channel
+      const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
+      const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
+      const logChannelId = settings[interaction.guildId]?.logChannelId;
 
-    if (logChannelId) {
-      const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
-      if (logChannel?.isTextBased()) {
-        await logChannel.send(`🥾 **Kick**: <@${target.id}> was kicked by <@${interaction.user.id}>\n📄 Reason: ${reason}`);
+      if (logChannelId) {
+        const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
+        if (logChannel?.isTextBased()) {
+          const logEmbed = new EmbedBuilder()
+            .setColor('Orange')
+            .setTitle(' Member Kicked')
+            .addFields(
+              { name: 'User', value: `<@${targetUser.id}> (${targetUser.tag})`, inline: true },
+              { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+              { name: 'Reason', value: reason }
+            )
+            .setTimestamp();
+
+          await logChannel.send({ embeds: [logEmbed] });
+        }
       }
-    }
 
-    await interaction.reply({ content: `✅ <@${target.id}> has been kicked.`, ephemeral: false });
+      const successEmbed = new EmbedBuilder()
+        .setColor('Green')
+        .setDescription(` <@${targetUser.id}> has been kicked.`);
+
+      await interaction.reply({ embeds: [successEmbed], ephemeral: false });
+    } catch (err) {
+      const failEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription(' Failed to kick the user.');
+      await interaction.reply({ embeds: [failEmbed], ephemeral: true });
+    }
   }
 };
-
