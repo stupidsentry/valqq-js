@@ -48,7 +48,7 @@ module.exports = {
           .setDescription('Greet new users with custom embed')
           .setValue('welcome'),
         new StringSelectMenuOptionBuilder()
-          .setLabel('❌ Close')
+          .setLabel('Close')
           .setDescription('Close the help menu')
           .setValue('cancel')
       );
@@ -71,7 +71,7 @@ module.exports = {
       const selection = i.values[0];
       if (selection === 'cancel') {
         await i.update({
-          content: '❌ Help menu closed.',
+          content: 'Help menu closed.',
           embeds: [],
           components: []
         });

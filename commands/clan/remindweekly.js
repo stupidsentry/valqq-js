@@ -1,11 +1,13 @@
-
 const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { DateTime } = require('luxon');
 
 const REMINDER_FILE = path.join(__dirname, '../../data/reminders.json');
+const TIMEZONE_FILE = path.join(__dirname, '../../data/timezoneSettings.json');
+
 if (!fs.existsSync(REMINDER_FILE)) fs.writeFileSync(REMINDER_FILE, '[]');
+if (!fs.existsSync(TIMEZONE_FILE)) fs.writeFileSync(TIMEZONE_FILE, '{}');
 
 function loadReminders() {
   return JSON.parse(fs.readFileSync(REMINDER_FILE));
@@ -13,6 +15,10 @@ function loadReminders() {
 
 function saveReminders(reminders) {
   fs.writeFileSync(REMINDER_FILE, JSON.stringify(reminders, null, 2));
+}
+
+function loadTimezones() {
+  return JSON.parse(fs.readFileSync(TIMEZONE_FILE));
 }
 
 function getNextOccurrence(day, time, timezone) {
@@ -35,7 +41,7 @@ function scheduleReminder(reminder, client) {
       const userPings = reminder.userIds.map(id => `<@${id}>`).join(' ');
       await channel.send(`${userPings}\n⏰ Weekly Reminder: **${reminder.message}**`);
     }
-    scheduleReminder(reminder, client); // reschedule for next week
+    scheduleReminder(reminder, client); // Reschedule for next week
   }, delay);
 }
 
@@ -51,8 +57,7 @@ module.exports = {
       .setDescription('Time (24h format, e.g. 18:30)')
       .setRequired(true))
     .addStringOption(opt => opt.setName('timezone')
-      .setDescription('Timezone (e.g. Australia/Sydney)')
-      .setRequired(true))
+      .setDescription('Timezone (e.g. Australia/Sydney). Leave blank to use default.'))
     .addUserOption(opt => opt.setName('user1').setDescription('User to mention'))
     .addUserOption(opt => opt.setName('user2').setDescription('User to mention'))
     .addUserOption(opt => opt.setName('user3').setDescription('User to mention'))
@@ -63,7 +68,8 @@ module.exports = {
     const message = interaction.options.getString('message');
     const weekday = interaction.options.getInteger('weekday');
     const timeStr = interaction.options.getString('time');
-    const timezone = interaction.options.getString('timezone');
+    let timezone = interaction.options.getString('timezone');
+
     const users = ['user1', 'user2', 'user3', 'user4', 'user5']
       .map(k => interaction.options.getUser(k))
       .filter(Boolean);
@@ -71,6 +77,17 @@ module.exports = {
     const [hour, minute] = timeStr.split(':').map(Number);
     if (isNaN(hour) || isNaN(minute) || weekday < 1 || weekday > 7) {
       return interaction.reply({ content: '❌ Invalid input. Check weekday or time format.', ephemeral: true });
+    }
+
+    // Load guild's default timezone if not specified
+    if (!timezone) {
+      const tzSettings = loadTimezones();
+      timezone = tzSettings[interaction.guildId] || 'Australia/Sydney';
+    }
+
+    // Validate timezone
+    if (!DateTime.now().setZone(timezone).isValid) {
+      return interaction.reply({ content: `❌ Invalid timezone: \`${timezone}\`.`, ephemeral: true });
     }
 
     const reminder = {
@@ -90,15 +107,11 @@ module.exports = {
     scheduleReminder(reminder, interaction.client);
 
     await interaction.reply({
-      content: `✅ Weekly reminder set for ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][weekday - 1]} at ${timeStr} (${timezone}) to ping ${users.map(u => u.username).join(', ')}`,
+      content: ` Weekly reminder set for **${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][weekday - 1]}** at **${timeStr} (${timezone})** to ping ${users.map(u => u.username).join(', ') || 'no users'}.`,
       ephemeral: true
     });
   },
 
   scheduleAll(client) {
     const all = loadReminders();
-    all.forEach(r => {
-      if (r.dayOfWeek && r.time && r.timezone) scheduleReminder(r, client);
-    });
-  }
-};
+    all.forEach(r
