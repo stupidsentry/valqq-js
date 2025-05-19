@@ -37,8 +37,8 @@ module.exports = {
         const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
         if (logChannel?.isTextBased()) {
           const embed = new EmbedBuilder()
-            .setColor('Orange')
-            .setTitle('🗑️ Message Deleted')
+            .setColor('Red')
+            .setTitle(' Message Deleted')
             .addFields(
               { name: 'Author', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
               { name: 'Channel', value: `<#${channel.id}>`, inline: true },

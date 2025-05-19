@@ -4,34 +4,41 @@ const path = require('path');
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('delete')
-    .setDescription('Delete a specific message by message ID in a given channel.')
-    .addChannelOption(opt =>
-      opt.setName('channel')
-        .setDescription('Channel where the message is located')
+    .setName('kick')
+    .setDescription('Kick a user from the server.')
+    .addUserOption(opt =>
+      opt.setName('user')
+        .setDescription('User to kick')
         .setRequired(true))
     .addStringOption(opt =>
-      opt.setName('message_id')
-        .setDescription('The ID of the message to delete')
-        .setRequired(true))
-    .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageMessages),
+      opt.setName('reason')
+        .setDescription('Reason for the kick')
+        .setRequired(false))
+    .setDefaultMemberPermissions(PermissionsBitField.Flags.KickMembers),
 
   async execute(interaction) {
-    const channel = interaction.options.getChannel('channel');
-    const messageId = interaction.options.getString('message_id');
+    const targetUser = interaction.options.getUser('user');
+    const reason = interaction.options.getString('reason') || 'No reason provided';
+    const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
 
-    if (!channel.isTextBased()) {
+    if (!member) {
       const errorEmbed = new EmbedBuilder()
         .setColor('Red')
-        .setDescription(' That channel is not text-based.');
+        .setDescription('User not found or not in the server.');
       return interaction.reply({ embeds: [errorEmbed], ephemeral: true });
     }
 
-    try {
-      const message = await channel.messages.fetch(messageId);
-      await message.delete();
+    if (!member.kickable) {
+      const permissionEmbed = new EmbedBuilder()
+        .setColor('Red')
+        .setDescription('I do not have permission to kick this user.');
+      return interaction.reply({ embeds: [permissionEmbed], ephemeral: true });
+    }
 
-      // Logging
+    try {
+      await member.kick(reason);
+
+      // Log to mod channel
       const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
       const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
       const logChannelId = settings[interaction.guildId]?.logChannelId;
@@ -41,11 +48,11 @@ module.exports = {
         if (logChannel?.isTextBased()) {
           const logEmbed = new EmbedBuilder()
             .setColor('Orange')
-            .setTitle('🗑️ Message Deleted')
+            .setTitle('Member Kicked')
             .addFields(
-              { name: 'Author', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
-              { name: 'Channel', value: `<#${channel.id}>`, inline: true },
-              { name: 'Message ID', value: `\`${messageId}\`` }
+              { name: 'User', value: `<@${targetUser.id}> (${targetUser.tag})`, inline: true },
+              { name: 'Moderator', value: `<@${interaction.user.id}>`, inline: true },
+              { name: 'Reason', value: reason }
             )
             .setTimestamp();
 
@@ -53,16 +60,15 @@ module.exports = {
         }
       }
 
-      //  Success embed reply to user
       const successEmbed = new EmbedBuilder()
         .setColor('Green')
-        .setDescription(` Message \`${messageId}\` deleted successfully.`);
+        .setDescription(`<@${targetUser.id}> has been kicked.`);
 
-      await interaction.reply({ embeds: [successEmbed], ephemeral: true });
+      await interaction.reply({ embeds: [successEmbed], ephemeral: false });
     } catch (err) {
       const failEmbed = new EmbedBuilder()
         .setColor('Red')
-        .setDescription('Failed to delete message. Check ID and channel.');
+        .setDescription('Failed to kick the user.');
       await interaction.reply({ embeds: [failEmbed], ephemeral: true });
     }
   }
