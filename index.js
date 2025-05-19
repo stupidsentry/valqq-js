@@ -1,18 +1,35 @@
-// Patch ReadableStream if needed
+// ✅ Patch ReadableStream if needed (for Discord.js + Undici)
 if (typeof global.ReadableStream === 'undefined') {
-  global.ReadableStream = require('stream/web').ReadableStream;
+  try {
+    global.ReadableStream = require('stream/web').ReadableStream;
+    console.log("✅ Patched ReadableStream manually");
+  } catch (err) {
+    console.error("❌ Failed to patch ReadableStream:", err);
+  }
 }
 
-// Setup express early
+// ✅ Set up Express
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.status(200).send('Valqq bot is alive ✅'));
+// ✅ Allow UptimeRobot and all origins
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  next();
+});
 
+// ✅ Root route (pinged by UptimeRobot)
+app.get('/', (req, res) => {
+  res.status(200).send('OK'); // Use simple, reliable response
+});
+
+// ✅ Start server
 app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
 
 
+// ======================= BOT STARTS HERE =========================
 
 require('dotenv').config();
 const fs = require('fs');
