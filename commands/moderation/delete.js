@@ -19,7 +19,7 @@ module.exports = {
     const messageId = interaction.options.getString('message_id');
 
     if (!channel.isTextBased()) {
-      return interaction.reply({ content: '❌ That channel is not text-based.', ephemeral: true });
+      return interaction.reply({ content: ' That channel is not text-based.', ephemeral: true });
     }
 
     try {
@@ -35,13 +35,13 @@ module.exports = {
       if (logChannelId) {
         const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
         if (logChannel?.isTextBased()) {
-          await logChannel.send(`🗑️ **Deleted Message** by <@${message.author.id}> in <#${channel.id}>\nMessage ID: \`${messageId}\``);
+          await logChannel.send(` **Deleted Message** by <@${message.author.id}> in <#${channel.id}>\nMessage ID: \`${messageId}\``);
         }
       }
 
-      await interaction.reply({ content: `✅ Message \`${messageId}\` deleted successfully.`, ephemeral: true });
+      await interaction.reply({ content: ` Message \`${messageId}\` deleted successfully.`, ephemeral: true });
     } catch (err) {
-      await interaction.reply({ content: '❌ Failed to delete message. Check ID and channel.', ephemeral: true });
+      await interaction.reply({ content: 'Failed to delete message. Check ID and channel.', ephemeral: true });
     }
   }
 };

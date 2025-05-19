@@ -1,39 +1,79 @@
-const { Events, EmbedBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { EmbedBuilder } = require('discord.js');
+const badwordsPath = path.join(__dirname, '../../data/badwords.json');
+
+// Load per-guild bad word list
+function getBadWords(guildId) {
+  if (!fs.existsSync(badwordsPath)) return [];
+  try {
+    const allWords = JSON.parse(fs.readFileSync(badwordsPath));
+    return allWords[guildId] || [];
+  } catch {
+    return [];
+  }
+}
+
+// Convert leetspeak and normalise text
+function normalise(text) {
+  return text
+    .toLowerCase()
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+    .replace(/7/g, 't')
+    .replace(/8/g, 'b')
+    .replace(/@/g, 'a')
+    .replace(/[^a-z]/g, '')       // remove non-letters
+    .replace(/(.)\1+/g, '$1');    // collapse repeated letters
+}
 
 module.exports = {
-  name: Events.MessageCreate,
-  async execute(message) {
-    if (message.author.bot || !message.guild) return;
+  data: null,
+  async monitor(message, client) {
+    const badwords = getBadWords(message.guild.id);
+    if (!badwords.length || !message.content) return;
 
-    // Load server settings
-    const settingsPath = path.join(__dirname, '../../data/guildSettings.json');
-    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
-    const guildSettings = settings[message.guild.id];
+    const original = message.content;
+    const cleaned = normalise(original);
 
-    if (!guildSettings || !guildSettings.badWords || !guildSettings.logChannelId) return;
+    const matchedWord = badwords.find(word => cleaned.includes(normalise(word)));
 
-    const badWords = guildSettings.badWords.map(word => word.toLowerCase());
-    const content = message.content.toLowerCase();
+    if (matchedWord) {
+      try {
+        await message.delete();
+        console.log(`[AUTOMOD] Deleted message for word: "${matchedWord}"`);
 
-    // Check for bad words
-    if (badWords.some(word => content.includes(word))) {
-      await message.delete().catch(() => null);
+        // Send embed DM to user
+        try {
+          const embed = new EmbedBuilder()
+            .setColor('DarkRed')
+            .setTitle(' Message Removed')
+            .setDescription(`Your message in **${message.guild.name}** was removed for containing a disallowed word.`)
+            .addFields(
+              { name: 'Matched Word', value: `\`${matchedWord}\``, inline: true },
+              { name: 'Original Message', value: `\`\`\`${original}\`\`\`` }
+            )
+            .setTimestamp();
 
-      const logChannel = await message.guild.channels.fetch(guildSettings.logChannelId).catch(() => null);
-      if (logChannel && logChannel.isTextBased()) {
-        const embed = new EmbedBuilder()
-          .setColor('Red')
-          .setTitle('Auto-Moderation Triggered')
-          .addFields(
-            { name: 'User', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
-            { name: 'Reason', value: 'Banned word detected.', inline: true },
-            { name: 'Message Content', value: message.content || 'N/A' }
-          )
-          .setTimestamp();
+          await message.author.send({ embeds: [embed] });
+          console.log(`[AUTOMOD] DM sent to ${message.author.tag}`);
+        } catch (dmErr) {
+          console.warn(`[AUTOMOD] Could not DM ${message.author.tag}:`, dmErr.message);
+        }
 
-        await logChannel.send({ embeds: [embed] });
+        // Log to moderation log channel
+        const logger = require('../../utils/logAction.js');
+        await logger.log(
+          message.guild,
+          'Automod: Obfuscated Bad Word',
+          message.author,
+          `Message deleted in <#${message.channel.id}>.\nMatched bypass of: \`${matchedWord}\`\n**Original Message:**\n\`\`\`${original}\`\`\``
+        );
+      } catch (err) {
+        console.error(' Failed to delete or log bypassed message:', err);
       }
     }
   }
