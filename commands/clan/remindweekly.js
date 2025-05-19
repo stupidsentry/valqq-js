@@ -107,11 +107,16 @@ module.exports = {
     scheduleReminder(reminder, interaction.client);
 
     await interaction.reply({
-      content: ` Weekly reminder set for **${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][weekday - 1]}** at **${timeStr} (${timezone})** to ping ${users.map(u => u.username).join(', ') || 'no users'}.`,
+      content: `✅ Weekly reminder set for **${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][weekday - 1]}** at **${timeStr} (${timezone})** to ping ${users.map(u => u.username).join(', ') || 'no users'}.`,
       ephemeral: true
     });
   },
 
   scheduleAll(client) {
     const all = loadReminders();
-    all.forEach(r
+    all.forEach(r => {
+      if (r.dayOfWeek && r.time && r.timezone) scheduleReminder(r, client);
+    });
+  }
+};
+
