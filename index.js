@@ -1,40 +1,3 @@
-// ✅ Patch ReadableStream if needed (for Discord.js + Undici)
-if (typeof global.ReadableStream === 'undefined') {
-  try {
-    global.ReadableStream = require('stream/web').ReadableStream;
-    console.log("✅ Patched ReadableStream manually");
-  } catch (err) {
-    console.error("❌ Failed to patch ReadableStream:", err);
-  }
-}
-
-// ✅ Set up Express
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ✅ Allow UptimeRobot and all origins
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  next();
-});
-
-app.get('/', (req, res) => {
-  res.status(200).send('OK');
-});
-
-app.get('/ping', (req, res) => {
-  res.status(200).send('pong');
-});
-
-
-// ✅ Start server
-app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
-
-
-// ======================= BOT STARTS HERE =========================
-
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
@@ -48,11 +11,10 @@ const {
   Routes
 } = require('discord.js');
 
-// 📦 Utility modules
 const settingsManager = require('./utils/settingsManager.js');
 const logger = require('./utils/logAction.js');
 
-// 🤖 Client configuration
+// Discord client 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -63,34 +25,33 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-// 🛠 Load & attach settings
+// Load settings
 client.settings = settingsManager.load();
 client.saveSettings = settingsManager.save;
 
-// 📁 Load commands
+// Load commands
 client.commands = new Collection();
 function loadCommands(dir = path.join(__dirname, 'commands')) {
   const files = fs.readdirSync(dir, { withFileTypes: true });
 
   for (const file of files) {
     const fullPath = path.join(dir, file.name);
-
     if (file.isDirectory()) {
       loadCommands(fullPath);
-    } else if (path.extname(file.name) === '.js') {
+    } else if (file.name.endsWith('.js')) {
       const command = require(fullPath);
       if (command?.data?.name) {
         client.commands.set(command.data.name, command);
         console.log(`✅ Loaded command: ${command.data.name}`);
       } else {
-        console.warn(`⚠️ Invalid command file skipped: ${file.name}`);
+        console.warn(`⚠️ Skipped invalid command file: ${file.name}`);
       }
     }
   }
 }
 loadCommands();
 
-// 🎧 Load events
+// Load events
 const eventsPath = path.join(__dirname, 'events');
 fs.readdirSync(eventsPath).forEach(file => {
   const event = require(path.join(eventsPath, file));
@@ -103,34 +64,34 @@ fs.readdirSync(eventsPath).forEach(file => {
   }
 });
 
-// ✅ Ready event
+// Ready event
 client.once(Events.ClientReady, async () => {
-  console.log(`🟢 Logged in as ${client.user.tag}`);
+  console.log(`Logged in as ${client.user.tag}`);
 
-  // 🔄 Register slash commands globally
+  // slash commands globally
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     const commandData = [...client.commands.values()]
       .filter(cmd => typeof cmd.data?.toJSON === 'function')
       .map(cmd => cmd.data.toJSON());
 
-    console.log('🌍 Registering global slash commands...');
+    console.log('Registering global slash commands...');
     await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commandData }
     );
-    console.log('✅ Global slash commands registered.');
+    console.log('Slash commands registered.');
   } catch (err) {
-    console.error('❌ Failed to register commands:', err);
+    console.error('Command registration error:', err);
   }
 
-  // 🟡 Set bot presence
+  // bot presence
   client.user.setPresence({
     status: 'idle',
     activities: [{ name: 'Blade Ball Clan ⚔️', type: 3 }]
   });
 
-  // 🧪 Log startup message
+  // Log bot startup
   try {
     const testGuild = client.guilds.cache.first();
     if (testGuild) {
@@ -142,10 +103,10 @@ client.once(Events.ClientReady, async () => {
       );
     }
   } catch (err) {
-    console.warn('⚠️ Startup log failed:', err.message);
+    console.warn('Startup log failed:', err.message);
   }
 
-  // ⏰ Schedule reminders
+  // Schedule reminders
   try {
     const remind = require('./commands/clan/remind.js');
     const remindWeekly = require('./commands/clan/remindweekly.js');
@@ -156,6 +117,5 @@ client.once(Events.ClientReady, async () => {
   }
 });
 
-
-// 🚀 Login
+// Start the bot
 client.login(process.env.TOKEN);
