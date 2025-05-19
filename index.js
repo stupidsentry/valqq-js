@@ -1,3 +1,21 @@
+// Patch ReadableStream if needed
+if (typeof global.ReadableStream === 'undefined') {
+  global.ReadableStream = require('stream/web').ReadableStream;
+}
+
+// Setup express early
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Route
+app.get('/', (req, res) => res.status(200).send('Valqq bot is alive ✅'));
+
+// Start server
+app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
+
+
+
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
