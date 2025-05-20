@@ -52,7 +52,7 @@ module.exports = {
 
     if (type === 'edit') {
       embed
-        .setTitle('✏️ Message Edited')
+        .setTitle('Message Edited')
         .setDescription(`Edited by <@${message.author?.id}> in <#${message.channel.id}>`)
         .addFields(
           { name: 'Before', value: message.oldContent || '*Unknown*' },

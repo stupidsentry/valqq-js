@@ -1,6 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const {
   Client,
   Collection,
@@ -12,9 +13,9 @@ const {
 } = require('discord.js');
 
 const settingsManager = require('./utils/settingsManager.js');
-const logger = require('./utils/logAction.js');
+const logAction = require('./utils/logAction.js');
 
-// Discord client 
+// 📦 Create the Discord client
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -25,11 +26,11 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
 });
 
-// Load settings
+// 📁 Load settings
 client.settings = settingsManager.load();
 client.saveSettings = settingsManager.save;
 
-// Load commands
+// 📁 Load commands
 client.commands = new Collection();
 function loadCommands(dir = path.join(__dirname, 'commands')) {
   const files = fs.readdirSync(dir, { withFileTypes: true });
@@ -51,24 +52,24 @@ function loadCommands(dir = path.join(__dirname, 'commands')) {
 }
 loadCommands();
 
-// Load events
+// 📁 Load events
 const eventsPath = path.join(__dirname, 'events');
 fs.readdirSync(eventsPath).forEach(file => {
-  const event = require(path.join(eventsPath, file));
-  const eventName = file.split('.')[0];
+  const fullPath = path.join(eventsPath, file);
+  const event = require(fullPath);
 
   if (typeof event === 'function') {
-    client.on(eventName, (...args) => event(...args, client));
+    client.on(file.split('.')[0], (...args) => event(...args, client));
   } else if (event.name && typeof event.execute === 'function') {
     client.on(event.name, (...args) => event.execute(...args, client));
   }
 });
 
-// Ready event
+// ✅ Client ready
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
-  // slash commands globally
+  // 🔧 Register slash commands globally
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
   try {
     const commandData = [...client.commands.values()]
@@ -76,46 +77,67 @@ client.once(Events.ClientReady, async () => {
       .map(cmd => cmd.data.toJSON());
 
     console.log('Registering global slash commands...');
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commandData }
-    );
-    console.log('Slash commands registered.');
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
+      body: commandData
+    });
+    console.log('✅ Slash commands registered.');
   } catch (err) {
-    console.error('Command registration error:', err);
+    console.error('❌ Command registration error:', err);
   }
 
-  // bot presence
+  // 🟢 Set bot presence
   client.user.setPresence({
     status: 'idle',
     activities: [{ name: 'Blade Ball Clan ⚔️', type: 3 }]
   });
 
-  // Log bot startup
+  // 🚀 Send startup webhook
   try {
-    const testGuild = client.guilds.cache.first();
-    if (testGuild) {
-      await logger.log(
-        testGuild,
-        'Bot Active',
-        client.user,
-        'Valqq is still online and ready.'
-      );
+    const pingUrl = process.env.STARTUP_PING_URL;
+    if (pingUrl) {
+      await axios.post(pingUrl, {
+        content: `**Valqq Bot is now online**\n> Started at \`${new Date().toLocaleString()}\``
+      });
+      console.log('✅ Startup ping sent.');
+    } else {
+      console.warn('⚠️ No STARTUP_PING_URL defined.');
     }
   } catch (err) {
-    console.warn('Startup log failed:', err.message);
+    console.error('❌ Failed to send startup ping:', err.message);
   }
 
-  // Schedule reminders
+  // 📶 Send uptime heartbeat every 60 seconds
+  const heartbeatUrl = process.env.HEARTBEAT_URL;
+  if (heartbeatUrl) {
+    setInterval(async () => {
+      try {
+        await axios.post(heartbeatUrl, {
+          embeds: [
+            {
+              title: '📶 Uptime Heartbeat',
+              description: `Valqq is still online and responsive.`,
+              color: 0x2ecc71,
+              timestamp: new Date().toISOString()
+            }
+          ]
+        });
+        console.log('✅ Uptime heartbeat sent.');
+      } catch (err) {
+        console.error('❌ Heartbeat webhook failed:', err.message);
+      }
+    }, 60_0000); // 60 seconds
+  }
+
+  // ⏰ Schedule reminders
   try {
     const remind = require('./commands/clan/remind.js');
     const remindWeekly = require('./commands/clan/remindweekly.js');
     remind?.scheduleAll?.(client);
     remindWeekly?.scheduleAll?.(client);
   } catch (err) {
-    console.error('Reminder scheduling error:', err.message);
+    console.error('❌ Reminder scheduling error:', err.message);
   }
 });
 
-// Start the bot
+// 🔑 Login to Discord
 client.login(process.env.TOKEN);

@@ -1,22 +1,36 @@
-const fs = require('fs');
-const path = require('path');
+const axios = require('axios');
 
-const SETTINGS_PATH = path.join(__dirname, '../data/guildSettings.json');
-let cache = null;
+const API_BASE = process.env.CONFIG_API_URL; // e.g. http://localhost:3000 or your VM IP
+const TOKEN = process.env.CONFIG_API_TOKEN;
 
-function load() {
-  if (!fs.existsSync(SETTINGS_PATH)) {
-    cache = {};
-    fs.writeFileSync(SETTINGS_PATH, '{}');
-  } else if (!cache) {
-    cache = JSON.parse(fs.readFileSync(SETTINGS_PATH));
-  }
-  return cache;
+function headers() {
+  return {
+    Authorization: `Bearer ${TOKEN}`
+  };
 }
 
-function save(data) {
-  cache = data;
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(data, null, 2));
+async function load(guildId) {
+  try {
+    const res = await axios.get(`${API_BASE}/guild/${guildId}/config`, {
+      headers: headers()
+    });
+    return res.data;
+  } catch (err) {
+    console.warn(`[⚠] Failed to load config for guild ${guildId}: ${err.response?.status || err.message}`);
+    return null;
+  }
+}
+
+async function save(guildId, config) {
+  try {
+    await axios.put(`${API_BASE}/guild/${guildId}/config`, config, {
+      headers: headers()
+    });
+    return true;
+  } catch (err) {
+    console.error(`[❌] Failed to save config for guild ${guildId}: ${err.message}`);
+    return false;
+  }
 }
 
 module.exports = { load, save };

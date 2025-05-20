@@ -1,1 +1,19 @@
-{}
+{
+  "1373612049011048549": {
+    "channelId": "1373612049942319218",
+    "title": "l",
+    "message": "l",
+    "color": "#5865F2",
+    "welcomeChannelId": "1373612049942319218",
+    "leaveChannelId": "1373612049942319218",
+    "leaveTitle": "boo",
+    "leaveMessage": "l",
+    "leaveColor": "#e74c3c"
+  },
+  "1372951838625894562": {
+    "channelId": "1372951839405903944",
+    "title": "Welcome",
+    "message": "welcome to the server",
+    "color": "#5865F2"
+  }
+}

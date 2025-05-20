@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const logAction = require('../../utils/logAction.js'); // ✅ import the logger
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -20,44 +21,29 @@ module.exports = {
 
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (!member) {
-      return interaction.reply({ content: '❌ User not found or not in the server.', ephemeral: true });
+      return interaction.reply({ content: 'User not found or not in the server.', ephemeral: true });
     }
 
     if (!member.bannable) {
-      return interaction.reply({ content: '❌ I do not have permission to ban this user.', ephemeral: true });
+      return interaction.reply({ content: 'I do not have permission to ban this user.', ephemeral: true });
     }
 
     await member.ban({ reason });
 
-    // Optional log channel
-    const settingsPath = require('path').join(__dirname, '../../data/guildSettings.json');
-    const fs = require('fs');
-    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath)) : {};
-    const logChannelId = settings[interaction.guildId]?.logChannelId;
+    // ✅ Log the ban using logAction
+    await logAction.log(
+      interaction.guild,
+      'Member Banned',
+      interaction.user,
+      `**User:** <@${target.id}> (${target.tag})\n**Reason:** ${reason}`,
+      'Moderation'
+    );
 
-    if (logChannelId) {
-      const logChannel = await interaction.guild.channels.fetch(logChannelId).catch(() => null);
-      if (logChannel?.isTextBased()) {
-        const embed = new EmbedBuilder()
-          .setTitle(' Member Banned')
-          .setColor('Red')
-          .addFields(
-            { name: 'User', value: `<@${target.id}> (${target.tag})`, inline: true },
-            { name: 'Moderator', value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
-            { name: 'Reason', value: reason }
-          )
-          .setTimestamp();
-
-        await logChannel.send({ embeds: [embed] });
-      }
-    }
-
+    // ✅ Acknowledge to moderator
     const responseEmbed = new EmbedBuilder()
-  .setColor('Green')
-  .setDescription(` <@${target.id}> has been banned.`);
+      .setColor('Green')
+      .setDescription(`<@${target.id}> has been banned.`);
 
-await interaction.reply({ embeds: [responseEmbed], ephemeral: false });
-
+    await interaction.reply({ embeds: [responseEmbed] });
   }
 };
-

@@ -15,24 +15,24 @@ function saveSettings(settings) {
 
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName('configwelcome')
-    .setDescription('Configure the welcome embed for new members.')
+    .setName('configleave')
+    .setDescription('Configure the leave embed for when a member leaves.')
     .addChannelOption(opt =>
       opt.setName('channel')
-        .setDescription('Channel to send the welcome message in')
+        .setDescription('Channel to send the leave message in')
         .addChannelTypes(ChannelType.GuildText)
         .setRequired(true))
     .addStringOption(opt =>
       opt.setName('title')
-        .setDescription('Embed title')
+        .setDescription('Embed title for the leave message')
         .setRequired(true))
     .addStringOption(opt =>
       opt.setName('description')
-        .setDescription('Embed description (use {user} to mention the new member)')
+        .setDescription('Embed description (use {user} to mention the member)')
         .setRequired(true))
     .addStringOption(opt =>
       opt.setName('color')
-        .setDescription('Hex colour code (e.g. #5865F2)')
+        .setDescription('Hex colour code (e.g. #e74c3c)')
         .setRequired(false))
     .setDefaultMemberPermissions(PermissionsBitField.Flags.ManageGuild),
 
@@ -40,24 +40,25 @@ module.exports = {
     const channel = interaction.options.getChannel('channel');
     const title = interaction.options.getString('title');
     const message = interaction.options.getString('description');
-    const color = interaction.options.getString('color') || '#5865F2';
+    const color = interaction.options.getString('color') || '#e74c3c';
 
     const settings = loadSettings();
     const guildId = interaction.guildId;
 
-    // Preserve existing leaveMessage if set
+    // Preserve existing welcome settings
     const existing = settings[guildId] || {};
 
     settings[guildId] = {
       ...existing,
-      welcomeChannelId: channel.id,
-      title,
-      message,
-      color
+      leaveChannelId: channel.id,
+      leaveTitle: title,
+      leaveMessage: message,
+      leaveColor: color
     };
 
     saveSettings(settings);
 
+    // Preview the embed using interaction user
     const previewEmbed = new EmbedBuilder()
       .setColor(color)
       .setTitle(title)
@@ -66,8 +67,8 @@ module.exports = {
       .setTimestamp();
 
     await interaction.reply({
+      content: `Leave configuration saved. The message will be sent in <#${channel.id}> when a member leaves.`,
       embeds: [previewEmbed],
-      content: `✅ Welcome configuration saved. The message will be sent in <#${channel.id}> when a new user joins.`,
       ephemeral: true
     });
   }
